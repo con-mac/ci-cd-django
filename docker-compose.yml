@@ -1,0 +1,12 @@
+# docker-compose.yml
+
+
+services:
+  web:
+    build: ./app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/usr/src/app
+    environment:
+      - DEBUG=1
