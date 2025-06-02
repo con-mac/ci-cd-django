@@ -45,7 +45,8 @@ INSTALLED_APPS = [
 
     # custom apps:
     'apps.app',
-    'apps.home', 
+    'apps.home',
+    'apps.tenants',
 
 ]
 

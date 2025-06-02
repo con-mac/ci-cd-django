@@ -8,7 +8,8 @@ services:
     container_name: django-web
     command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
     volumes:
-      - .:/usr/src/app
+      - ./app:/usr/src/app
+
     ports:
       - "8000:8000"
     env_file: .env
@@ -20,7 +21,7 @@ services:
     container_name: postgres-db
     restart: always
     environment:
-      POSTGRES_DB: ${POSTGRES_NAME}
+      POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
