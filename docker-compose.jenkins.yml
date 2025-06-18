@@ -21,5 +21,10 @@ services:
   db:
     ports: []  # Prevent conflict
 
+  web:
+    volumes:
+      - /var/jenkins_home/workspace/ci-cd-django-pipeline/app:/usr/src/app
+
+
 volumes:
   jenkins_home:

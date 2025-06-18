@@ -10,6 +10,11 @@ WORKDIR /usr/src/app
 
 COPY . .
 
+# Debug: List what was copied
+RUN echo "=== Contents of /usr/src/app ===" && ls -la /usr/src/app
+RUN echo "=== Looking for manage.py ===" && find /usr/src/app -name "manage.py" -type f
+RUN echo "=== Current working directory ===" && pwd
+
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 ENV PYTHONPATH=/usr/src/app

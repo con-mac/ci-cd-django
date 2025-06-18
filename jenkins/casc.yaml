@@ -1,0 +1,29 @@
+jenkins:
+  systemMessage: "Provisioned by Jenkins Configuration as Code (JCasC)!"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "changeme"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+tool:
+  sonarRunnerInstallation:
+    installations:
+      - name: "SonarQubeScanner"
+        home: "/usr/local/bin/sonar-scanner"
+
+#unclassified:
+ # owaspDependencyCheck:
+    # Example settings; customize as needed
+  #  autoUpdate: true
+   # suppressionFile: ""
+  #trivyGlobalConfiguration:
+    # Example settings; adjust per your setup
+   # severity: "HIGH,CRITICAL"
+
+# You can configure jobs, credentials, and more here as you progress!

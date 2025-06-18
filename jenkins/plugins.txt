@@ -1,0 +1,26 @@
+# Core pipeline and UX
+blueocean
+workflow-aggregator           # Brings in pipeline essentials (includes workflow-job, workflow-multibranch)
+pipeline-stage-view
+docker-workflow               # Pipeline step for Docker (use this, NOT docker-pipeline or docker-plugin)
+kubernetes                    # Use this for Kubernetes agent support (not kubernetes-cd)
+
+# DevSecOps & Analysis
+sonar                         # SonarQube Scanner Plugin
+
+
+# (Trivy and Dastardly: no plugins—run as CLI in pipeline steps!)
+
+# Useful extras
+credentials
+credentials-binding
+git
+git-parameter
+configuration-as-code         # JCasC!
+job-dsl                       # Declarative jobs as code
+matrix-auth
+ws-cleanup
+email-ext
+
+# UI/Visuals/Theme
+simple-theme-plugin
