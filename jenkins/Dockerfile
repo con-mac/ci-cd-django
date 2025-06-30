@@ -26,7 +26,12 @@ ENV CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
 # Trivy (security scanner)
 RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
-
+# SonarScanner CLI
+ENV SONAR_SCANNER_VERSION=5.0.1.3006
+RUN curl -Lo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux.zip \
+    && unzip /tmp/sonar-scanner.zip -d /opt \
+    && ln -s /opt/sonar-scanner-${SONAR_SCANNER_VERSION}-linux/bin/sonar-scanner /usr/local/bin/sonar-scanner \
+    && rm /tmp/sonar-scanner.zip
 
 # OWASP Dependency-Check CLI
 ENV DEPENDENCY_CHECK_VERSION=9.0.10

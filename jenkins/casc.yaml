@@ -15,6 +15,12 @@ jenkins:
 unclassified:
   githubConfiguration:
     apiRateLimitChecker: ThrottleForNormalize
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: "My SonarQube Server"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonarqube-token"
 
 tool:
   sonarRunnerInstallation:
@@ -32,3 +38,6 @@ tool:
    # severity: "HIGH,CRITICAL"
 
 # You can configure jobs, credentials, and more here as you progress!
+
+# To fully automate, add a secret text credential with ID 'sonarqube-token' containing your SonarQube token.
+# You can do this via the Jenkins UI or with a credentials.yaml file if using the credentials-binding plugin.
