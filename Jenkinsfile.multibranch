@@ -1,19 +1,22 @@
+// Multibranch Pipeline Configuration
+// This file defines how Jenkins should handle different branches
+
 pipeline {
     agent any
 
     environment {
         COMPOSE_FILES = "-f docker-compose.yml -f docker-compose.jenkins.yml"
-        WORKDIR = "/var/jenkins_home/workspace/ci-cd-django-pipeline"
+        WORKDIR = "/var/jenkins_home/workspace/${env.JOB_NAME}/${env.BRANCH_NAME}"
         DOCKER_COMPOSE = "docker-compose"
         COMPOSE_OVERRIDE = "-f docker-compose.yml -f docker-compose.jenkins.yml"
     }
 
-    // Automatic triggers - pipeline runs on:
-    // 1. Every push to any branch
-    // 2. Every pull request
-    // 3. Manual trigger from Jenkins UI
-    triggers {
-        pollSCM('H/5 * * * *')  // Poll SCM every 5 minutes as fallback
+    // Branch-specific behavior
+    options {
+        // Skip duplicate builds
+        skipDefaultCheckout(true)
+        // Build only if there are changes
+        skipStagesAfterUnstable()
     }
 
     stages {
@@ -22,14 +25,32 @@ pipeline {
                 checkout scm
             }
         }
+        
         stage('SonarQube Analysis') {
+            when {
+                // Only run on main branch or pull requests
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    changeRequest()
+                }
+            }
             steps {
                 withSonarQubeEnv('My SonarQube Server') {
                     sh 'sonar-scanner'
                 }
             }
         }
+        
         stage('Dependency Scan (OWASP)') {
+            when {
+                // Only run on main branch or pull requests
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    changeRequest()
+                }
+            }
             steps {
                 echo "🔒 Running OWASP Dependency-Check on source code..."
                 dir("${env.WORKDIR}/app") {
@@ -37,6 +58,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Build Docker Images') {
             steps {
                 echo "🔧 Building Docker images for web and db..."
@@ -45,7 +67,16 @@ pipeline {
                 }
             }
         }
+        
         stage('Trivy Image Scan') {
+            when {
+                // Only run on main branch or pull requests
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    changeRequest()
+                }
+            }
             steps {
                 echo "🔒 Running Trivy scan on Django web image..."
                 dir("${env.WORKDIR}") {
@@ -53,6 +84,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Start Services') {
             steps {
                 echo "⏳ Starting database and web service..."
@@ -62,6 +94,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Run Migrations') {
             steps {
                 echo "📦 Running Django database migrations..."
@@ -74,7 +107,16 @@ pipeline {
                 }
             }
         }
+        
         stage('OWASP ZAP: DAST Scan') {
+            when {
+                // Only run on main branch or pull requests
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    changeRequest()
+                }
+            }
             steps {
                 echo "🔒 Running OWASP ZAP DAST scan..."
                 sh '''
@@ -83,14 +125,31 @@ pipeline {
                 '''
             }
         }
+        
         stage('Generate SBOM (CycloneDX)') {
+            when {
+                // Only run on main branch or pull requests
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                    changeRequest()
+                }
+            }
             steps {
                 echo "📦 Generating SBOM with Trivy..."
                 sh 'trivy image --format cyclonedx --output sbom-cyclonedx.json ci-cd-django-pipeline-web:latest'
                 archiveArtifacts artifacts: 'sbom-cyclonedx.json', fingerprint: true
             }
         }
+        
         stage('Upload SBOM to Dependency-Track') {
+            when {
+                // Only run on main branch
+                anyOf {
+                    branch 'main'
+                    branch 'master'
+                }
+            }
             steps {
                 withCredentials([string(credentialsId: 'DT_API_KEY', variable: 'DT_API_KEY')]) {
                     sh '''
@@ -122,11 +181,11 @@ pipeline {
                 sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} logs db || true"
             }
             // Example Slack notification (requires Slack plugin/config)
-            slackSend (channel: '#ci-cd-alerts', color: 'danger', message: "❌ Build #${env.BUILD_NUMBER} failed: ${env.JOB_NAME}")
+            slackSend (channel: '#ci-cd-alerts', color: 'danger', message: "❌ Build #${env.BUILD_NUMBER} failed: ${env.JOB_NAME} (${env.BRANCH_NAME})")
         }
         success {
             // Example Slack notification (requires Slack plugin/config)
-            slackSend (channel: '#ci-cd-alerts', color: 'good', message: "✅ Build #${env.BUILD_NUMBER} succeeded: ${env.JOB_NAME}")
+            slackSend (channel: '#ci-cd-alerts', color: 'good', message: "✅ Build #${env.BUILD_NUMBER} succeeded: ${env.JOB_NAME} (${env.BRANCH_NAME})")
         }
     }
-}
+} 

@@ -20,6 +20,7 @@ ci-cd-django/
 ├── docker-compose.local.yml    # Local development overrides
 ├── docker-compose.jenkins.yml  # Jenkins CI/CD overrides
 ├── Jenkinsfile           # Jenkins pipeline
+├── Jenkinsfile.multibranch # Multibranch pipeline (optional)
 ├── Makefile              # Development commands
 ├── create_env.sh         # Script to create .env file for local development
 └── .env                  # Environment variables (optional, created by script)
@@ -49,11 +50,14 @@ make down
 ### CI/CD Pipeline
 
 The project uses Jenkins for CI/CD with the following stages:
+- Checkout code from GitHub
+- SonarQube static code analysis (SAST)
 - Build Docker images
 - Run database migrations
 - Start services
-- Health checks
-- Security scans (Trivy, OWASP Dependency-Check, DAST)
+- Security scans (Trivy, OWASP Dependency-Check, OWASP ZAP DAST)
+- Generate and upload SBOM
+- Slack notifications (optional)
 
 ## Docker Compose Files
 
@@ -105,6 +109,33 @@ For local development, you can optionally create a `.env` file using the provide
 ```bash
 ./create_env.sh
 ```
+
+## Webhooks and Local Development with ngrok
+
+For local CI/CD development, we use [ngrok](https://ngrok.com/) to expose Jenkins to GitHub webhooks.
+
+- **What ngrok does:**  
+  ngrok creates a secure tunnel from a public URL to your local Jenkins server, allowing GitHub to send webhook events to your pipeline.
+
+- **How to start ngrok:**
+  ```bash
+  snap run ngrok http 8080
+  # or, if installed directly:
+  ngrok http 8080
+  ```
+
+- **Update your GitHub webhook:**  
+  Set the payload URL to:
+  ```
+  https://<your-ngrok-subdomain>.ngrok-free.app/github-webhook/
+  ```
+  (Replace with the actual forwarding URL shown by ngrok)
+
+- **Monitor ngrok:**
+  - [ngrok Web Interface](http://127.0.0.1:4040) — Inspect requests and tunnel status
+  - [Jenkins UI](http://localhost:8080) — View build status
+
+> **Note:** The ngrok public URL changes each time you restart it. Update your GitHub webhook accordingly.
 
 ## Troubleshooting
 

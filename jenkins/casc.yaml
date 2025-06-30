@@ -11,6 +11,11 @@ jenkins:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
 
+# Configure GitHub webhook support
+unclassified:
+  githubConfiguration:
+    apiRateLimitChecker: ThrottleForNormalize
+
 tool:
   sonarRunnerInstallation:
     installations:

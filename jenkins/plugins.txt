@@ -5,6 +5,10 @@ pipeline-stage-view
 docker-workflow               # Pipeline step for Docker (use this, NOT docker-pipeline or docker-plugin)
 kubernetes                    # Use this for Kubernetes agent support (not kubernetes-cd)
 
+# GitHub Integration
+github                        # GitHub integration for webhooks and API
+github-branch-source         # GitHub branch source plugin for multibranch pipelines
+
 # DevSecOps & Analysis
 sonar                         # SonarQube Scanner Plugin
 
