@@ -9,32 +9,26 @@ pipeline {
     }
 
     stages {
-        stage('Cleanup: Remove Existing Containers and Images') {
+        stage('Checkout') {
             steps {
-                echo "🧹 Cleaning up existing containers and images..."
-                dir("${env.WORKDIR}") {
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} down --remove-orphans || true"
-                    sh "docker stop django-web || true"
-                    sh "docker rm django-web || true"
-                    sh "docker stop ci-cd-django-pipeline-db-1 || true"
-                    sh "docker rm ci-cd-django-pipeline-db-1 || true"
-                    sh "docker rmi ci-cd-django-pipeline-web:latest || true"
-                    sh "docker rmi ci-cd-django-pipeline-db-1 || true"
+                checkout scm
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('My SonarQube Server') {
+                    sh 'sonar-scanner'
                 }
             }
         }
-
-        stage('Debug: Confirm Jenkins Workspace and Code') {
+        stage('Dependency Scan (OWASP)') {
             steps {
-                echo "🔍 Debug: Checking workspace content before build..."
-                dir("${env.WORKDIR}") {
-                    sh "pwd"
-                    sh "ls -al"
-                    sh "ls -al app"
+                echo "🔒 Running OWASP Dependency-Check on source code..."
+                dir("${env.WORKDIR}/app") {
+                    sh 'dependency-check --project "django-app" --scan . --format "HTML,JSON" --out /var/jenkins_home/depcheck-report || true'
                 }
             }
         }
-
         stage('Build Docker Images') {
             steps {
                 echo "🔧 Building Docker images for web and db..."
@@ -43,29 +37,23 @@ pipeline {
                 }
             }
         }
-
-        stage('Wait for Database') {
+        stage('Trivy Image Scan') {
             steps {
-                echo "⏳ Starting database and waiting for it to be ready..."
+                echo "🔒 Running Trivy scan on Django web image..."
                 dir("${env.WORKDIR}") {
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} up -d db"
-                    sh "sleep 10"  // Give database time to start
+                    sh 'trivy image ci-cd-django-pipeline-web:latest || true'
                 }
             }
         }
-
-        stage('Debug: Confirm manage.py in Container') {
+        stage('Start Services') {
             steps {
-                echo "🔍 Debug: Checking for manage.py inside container..."
+                echo "⏳ Starting database and web service..."
                 dir("${env.WORKDIR}") {
-                    sh "pwd"
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} config"
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} run --rm web ls -la /usr/src/app/"
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} run --rm web find /usr/src/app -name 'manage.py' -type f"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} up -d db web"
+                    sh "sleep 10"  // Give services time to start
                 }
             }
         }
-
         stage('Run Migrations') {
             steps {
                 echo "📦 Running Django database migrations..."
@@ -78,68 +66,36 @@ pipeline {
                 }
             }
         }
-
-        stage('Start Django Service') {
-            steps {
-                echo "🚀 Starting web service..."
-                dir("${env.WORKDIR}") {
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} up -d web"
-                }
-            }
-        }
-
-        stage('Health Check') {
-            steps {
-                echo "🏥 Performing health check..."
-                dir("${env.WORKDIR}") {
-                    sh "sleep 5"  // Give web service time to start
-                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} ps"
-                }
-            }
-        }
-
-        // --- DEVSECOPS TOOLING ---
-        stage('Trivy: Container Vulnerability Scan') {
-            steps {
-                echo "🔒 Running Trivy scan on Django web image..."
-                dir("${env.WORKDIR}") {
-                    sh 'trivy image ci-cd-django-pipeline-web:latest || true' // allow to continue if vulnerabilities are found
-                }
-            }
-        }
-
-        stage('OWASP Dependency-Check: Python Package Scan') {
-            steps {
-                echo "🔒 Running OWASP Dependency-Check on source code..."
-                dir("${env.WORKDIR}/app") {
-                    sh 'dependency-check --project "django-app" --scan . --format "HTML,JSON" --out /var/jenkins_home/depcheck-report || true'
-                }
-            }
-        }
-
         stage('OWASP ZAP: DAST Scan') {
             steps {
                 echo "🔒 Running OWASP ZAP DAST scan..."
                 sh '''
-                    # Wait for the web service to be up (adjust as needed)
                     sleep 10
-                    # Run ZAP baseline scan against the Django web app
                     docker run --network ci-cd-django-pipeline_default -t owasp/zap2docker-stable zap-baseline.py -t http://web:8000/ -r zap-report.html || true
                 '''
             }
         }
-
         stage('Generate SBOM (CycloneDX)') {
             steps {
                 echo "📦 Generating SBOM with Trivy..."
-                sh '''
-                    trivy image --format cyclonedx --output sbom-cyclonedx.json ci-cd-django-pipeline-web:latest
-                '''
-                // Optionally, archive the SBOM as a Jenkins artifact
+                sh 'trivy image --format cyclonedx --output sbom-cyclonedx.json ci-cd-django-pipeline-web:latest'
                 archiveArtifacts artifacts: 'sbom-cyclonedx.json', fingerprint: true
             }
         }
-        
+        stage('Upload SBOM to Dependency-Track') {
+            steps {
+                withCredentials([string(credentialsId: 'DT_API_KEY', variable: 'DT_API_KEY')]) {
+                    sh '''
+                        curl -X POST "http://localhost:8081/api/v1/bom" \
+                        -H "X-Api-Key: $DT_API_KEY" \
+                        -H "Content-Type: multipart/form-data" \
+                        -F "projectName=ci-cd-django" \
+                        -F "autoCreate=true" \
+                        -F "bom=@sbom-cyclonedx.json"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -157,6 +113,12 @@ pipeline {
                 sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} logs web || true"
                 sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} logs db || true"
             }
+            // Example Slack notification (requires Slack plugin/config)
+            slackSend (channel: '#ci-cd-alerts', color: 'danger', message: "❌ Build #${env.BUILD_NUMBER} failed: ${env.JOB_NAME}")
+        }
+        success {
+            // Example Slack notification (requires Slack plugin/config)
+            slackSend (channel: '#ci-cd-alerts', color: 'good', message: "✅ Build #${env.BUILD_NUMBER} succeeded: ${env.JOB_NAME}")
         }
     }
 }
