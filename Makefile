@@ -10,7 +10,7 @@
 # =====================================================================
 
 # Base Compose command (dev only)
-COMPOSE_DEV = docker-compose
+COMPOSE_DEV = docker-compose -f docker-compose.yml -f docker-compose.local.yml
 
 # Compose command for CI (uses overrides from docker-compose.jenkins.yml)
 COMPOSE_CI = docker-compose -f docker-compose.yml -f docker-compose.jenkins.yml

@@ -4,9 +4,26 @@ pipeline {
     environment {
         COMPOSE_FILES = "-f docker-compose.yml -f docker-compose.jenkins.yml"
         WORKDIR = "/var/jenkins_home/workspace/ci-cd-django-pipeline"
+        DOCKER_COMPOSE = "docker-compose"
+        COMPOSE_OVERRIDE = "-f docker-compose.yml -f docker-compose.jenkins.yml"
     }
 
     stages {
+        stage('Cleanup: Remove Existing Containers and Images') {
+            steps {
+                echo "🧹 Cleaning up existing containers and images..."
+                dir("${env.WORKDIR}") {
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} down --remove-orphans || true"
+                    sh "docker stop django-web || true"
+                    sh "docker rm django-web || true"
+                    sh "docker stop ci-cd-django-pipeline-db-1 || true"
+                    sh "docker rm ci-cd-django-pipeline-db-1 || true"
+                    sh "docker rmi ci-cd-django-pipeline-web:latest || true"
+                    sh "docker rmi ci-cd-django-pipeline-db-1 || true"
+                }
+            }
+        }
+
         stage('Debug: Confirm Jenkins Workspace and Code') {
             steps {
                 echo "🔍 Debug: Checking workspace content before build..."
@@ -22,7 +39,7 @@ pipeline {
             steps {
                 echo "🔧 Building Docker images for web and db..."
                 dir("${env.WORKDIR}") {
-                    sh "docker-compose ${COMPOSE_FILES} build web db"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} build --no-cache web db"
                 }
             }
         }
@@ -31,7 +48,7 @@ pipeline {
             steps {
                 echo "⏳ Starting database and waiting for it to be ready..."
                 dir("${env.WORKDIR}") {
-                    sh "docker-compose ${COMPOSE_FILES} up -d db"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} up -d db"
                     sh "sleep 10"  // Give database time to start
                 }
             }
@@ -41,7 +58,10 @@ pipeline {
             steps {
                 echo "🔍 Debug: Checking for manage.py inside container..."
                 dir("${env.WORKDIR}") {
-                    sh "docker-compose ${COMPOSE_FILES} run --rm web ls -l /usr/src/app"
+                    sh "pwd"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} config"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} run --rm web ls -la /usr/src/app/"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} run --rm web find /usr/src/app -name 'manage.py' -type f"
                 }
             }
         }
@@ -51,7 +71,7 @@ pipeline {
                 echo "📦 Running Django database migrations..."
                 dir("${env.WORKDIR}") {
                     sh """
-                        docker-compose ${COMPOSE_FILES} run --rm \
+                        ${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} run --rm \
                         -w /usr/src/app \
                         web python manage.py migrate
                     """
@@ -63,7 +83,7 @@ pipeline {
             steps {
                 echo "🚀 Starting web service..."
                 dir("${env.WORKDIR}") {
-                    sh "docker-compose ${COMPOSE_FILES} up -d web"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} up -d web"
                 }
             }
         }
@@ -73,7 +93,7 @@ pipeline {
                 echo "🏥 Performing health check..."
                 dir("${env.WORKDIR}") {
                     sh "sleep 5"  // Give web service time to start
-                    sh "docker-compose ${COMPOSE_FILES} ps"
+                    sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} ps"
                 }
             }
         }
@@ -83,7 +103,7 @@ pipeline {
             steps {
                 echo "🔒 Running Trivy scan on Django web image..."
                 dir("${env.WORKDIR}") {
-                    sh 'trivy image ci-cd-django-web:latest || true' // allow to continue if vulnerabilities are found
+                    sh 'trivy image ci-cd-django-pipeline-web:latest || true' // allow to continue if vulnerabilities are found
                 }
             }
         }
@@ -97,22 +117,28 @@ pipeline {
             }
         }
 
-
-        stage('DevSecOps: DAST with Dastardly') {
+        stage('OWASP ZAP: DAST Scan') {
             steps {
-                echo "🔎 Running Dastardly DAST scan (Burp Suite Community)..."
+                echo "🔒 Running OWASP ZAP DAST scan..."
                 sh '''
-                    curl -L "https://github.com/PortSwigger/dastardly/releases/latest/download/dastardly-linux-amd64.tar.gz" -o dastardly.tar.gz
-                    mkdir -p dastardly
-                    tar -xzvf dastardly.tar.gz -C dastardly
-                    chmod +x dastardly/dastardly.sh
-                    # Example scan command:
-                    ./dastardly/dastardly.sh --url http://web:8000/
+                    # Wait for the web service to be up (adjust as needed)
+                    sleep 10
+                    # Run ZAP baseline scan against the Django web app
+                    docker run --network ci-cd-django-pipeline_default -t owasp/zap2docker-stable zap-baseline.py -t http://web:8000/ -r zap-report.html || true
                 '''
             }
         }
 
-
+        stage('Generate SBOM (CycloneDX)') {
+            steps {
+                echo "📦 Generating SBOM with Trivy..."
+                sh '''
+                    trivy image --format cyclonedx --output sbom-cyclonedx.json ci-cd-django-pipeline-web:latest
+                '''
+                // Optionally, archive the SBOM as a Jenkins artifact
+                archiveArtifacts artifacts: 'sbom-cyclonedx.json', fingerprint: true
+            }
+        }
         
     }
 
@@ -120,16 +146,16 @@ pipeline {
         always {
             echo "🧹 Cleaning up containers and volumes (excluding Jenkins)..."
             dir("${env.WORKDIR}") {
-                sh "docker-compose ${COMPOSE_FILES} stop db web || true"
-                sh "docker-compose ${COMPOSE_FILES} rm -f db web || true"
+                sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} stop db web || true"
+                sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} rm -f db web || true"
                 sh "docker volume prune -f || true"
             }
         }
         failure {
             echo "💥 Pipeline failed! Collecting logs..."
             dir("${env.WORKDIR}") {
-                sh "docker-compose ${COMPOSE_FILES} logs web || true"
-                sh "docker-compose ${COMPOSE_FILES} logs db || true"
+                sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} logs web || true"
+                sh "${DOCKER_COMPOSE} ${COMPOSE_OVERRIDE} logs db || true"
             }
         }
     }
