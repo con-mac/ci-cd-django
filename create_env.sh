@@ -15,4 +15,4 @@ ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
 EOF
 
 echo ".env file created successfully!"
-echo "Note: This file is gitignored and should not be committed to version control." 
+echo "Note: This file is gitignored and should not be committed to version control."
