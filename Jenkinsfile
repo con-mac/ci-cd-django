@@ -79,7 +79,7 @@ pipeline {
                 echo "🔒 Running OWASP ZAP DAST scan..."
                 sh '''
                     sleep 10
-                    docker run --network ci-cd-django-pipeline_default -t owasp/zap2docker-stable zap-baseline.py -t http://web:8000/ -r zap-report.html || true
+                    docker run --network ci-cd-django-pipeline_default -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://web:8000/ -r zap-report.html || true
                 '''
             }
         }
