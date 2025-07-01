@@ -3,7 +3,6 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
-    container_name: django-web
     command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
     ports:
       - "8000:8000"
@@ -31,7 +30,6 @@ services:
 
   sonarqube:
     image: sonarqube:lts
-    container_name: sonarqube
     ports:
       - "9000:9000"
     environment:
@@ -42,7 +40,6 @@ services:
 
   dependencytrack:
     image: dependencytrack/apiserver
-    container_name: dependencytrack
     ports:
       - "8081:8080"
     environment:
@@ -52,11 +49,10 @@ services:
 
   dependencytrack-frontend:
     image: dependencytrack/frontend
-    container_name: dependencytrack-frontend
     ports:
       - "8082:8080"
     environment:
-      - API_BASE_URL=http://dependencytrack:8080
+      - API_BASE_URL=http://localhost:8081
     depends_on:
       - dependencytrack
 
