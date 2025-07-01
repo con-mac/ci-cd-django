@@ -40,7 +40,28 @@ services:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
 
+  dependencytrack:
+    image: dependencytrack/apiserver
+    container_name: dependencytrack
+    ports:
+      - "8081:8080"
+    environment:
+      - ALPINE_DATABASE_MODE=internal
+    volumes:
+      - dependencytrack_data:/data  
+
+  dependencytrack-frontend:
+    image: dependencytrack/frontend
+    container_name: dependencytrack-frontend
+    ports:
+      - "8082:8080"
+    environment:
+      - API_BASE_URL=http://dependencytrack:8080
+    depends_on:
+      - dependencytrack
+
 volumes:
   pgdata:
   sonarqube_data:
   sonarqube_extensions:
+  dependencytrack_data:
