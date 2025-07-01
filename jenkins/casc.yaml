@@ -21,12 +21,48 @@ unclassified:
       - name: "My SonarQube Server"
         serverUrl: "http://sonarqube:9000"
         credentialsId: "sonarqube-token"
+  slackNotifier:
+    teamDomain: "your-slack-team"  # <-- Set your Slack team domain
+    tokenCredentialId: "slack-token"  # <-- Reference to Slack token credential
+    room: "#ci-cd-alerts"  # Default channel
+    sendAs: "jenkins-bot"
+    notifyStart: false
+    notifySuccess: true
+    notifyAborted: true
+    notifyNotBuilt: true
+    notifyUnstable: true
+    notifyFailure: true
+    notifyBackToNormal: true
+    notifyRepeatedFailure: true
+    startNotification: false
+    includeTestSummary: true
+    includeCustomMessage: false
+    customMessage: ""
+    commitInfoChoice: "NONE"
+    includeCustomAttachmentMessage: false
+    customAttachmentMessage: ""
+    includeTestSummary: true
+    includeFailedTests: true
+    includeCustomMessage: false
+    customMessage: ""
+    sendAs: "jenkins-bot"
+    botUser: true
+    baseUrl: "https://slack.com/api/"
+    tokenCredentialId: "slack-token"
 
+# Tool configuration for SonarQube Scanner
 tool:
   sonarRunnerInstallation:
     installations:
       - name: "SonarQubeScanner"
         home: "/usr/local/bin/sonar-scanner"
+
+# Enable Dependency-Check and Trivy global config
+owaspDependencyCheck:
+  autoUpdate: true
+  suppressionFile: ""
+trivyGlobalConfiguration:
+  severity: "HIGH,CRITICAL"
 
 #unclassified:
  # owaspDependencyCheck:
@@ -41,3 +77,44 @@ tool:
 
 # To fully automate, add a secret text credential with ID 'sonarqube-token' containing your SonarQube token.
 # You can do this via the Jenkins UI or with a credentials.yaml file if using the credentials-binding plugin.
+
+credentials:
+  system:
+    domainCredentials:
+      - domain: ""
+        credentials:
+          - string:
+              scope: GLOBAL
+              id: "sonarqube-token"
+              secret: "${SONARQUBE_TOKEN}"  # <-- Set as env var or in a secrets file
+              description: "SonarQube API Token"
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "${SLACK_TOKEN}"  # <-- Set as env var or in a secrets file
+              description: "Slack Bot/User Token"
+
+# Example: Seed job for job DSL or pipeline (optional, for reference)
+# jobs:
+#   - script: >
+#       pipelineJob('seed-job') {
+#         definition {
+#           cps {
+#             script('''
+#               pipeline {
+#                 agent any
+#                 stages {
+#                   stage('Hello') {
+#                     steps { echo 'Hello from seed job!' }
+#                   }
+#                 }
+#               }
+#             ''')
+#           }
+#         }
+#       }
+
+# Notes:
+# - Set SONARQUBE_TOKEN and SLACK_TOKEN as environment variables or in a secure secrets file.
+# - Multibranch Pipeline jobs are recommended for GitHub integration and webhooks.
+# - Do not delete the jenkins_home volume to persist all Jenkins data and config.
